@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Almacén Virtual 2D</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<style>
+body {
+  font-family: system-ui, Arial;
+  margin: 20px;
+  max-width: 1100px;
+}
+
+.top {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+select, button {
+  padding: 8px 12px;
+  font-size: 14px;
+}
+
+.grid {
+  margin-top: 20px;
+  display: grid;
+  grid-template-columns: 80px repeat(4, 1fr);
+  gap: 10px;
+}
+
+.header, .rowlabel {
+  font-weight: bold;
+  text-align: center;
+}
+
+.cell {
+  border-radius: 12px;
+  padding: 10px;
+  min-height: 80px;
+  border: 1px solid #ccc;
+}
+
+.vacio {
+  background: #f2f2f2;
+}
+
+.ocupado {
+  background: #e6f4ea;
+}
+
+.code {
+  font-weight: bold;
+}
+
+.muted {
+  color: #666;
+  font-size: 12px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="top">
+  <h2>Almacén Virtual</h2>
+
+  <select id="almacen">
+    <option value="ALM1">ALM1</option>
+    <option value="ALM2">ALM2</option>
+  </select>
+
+  <button onclick="cargar()">Actualizar</button>
+  <span id="estado" class="muted"></span>
+</div>
+
+<div id="grid" class="grid"></div>
+
+<script>
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz_XjZgMWd3LjbY0H7PfHyNi38CBGLhghoKkoi2Q6xkHv7IXGYYr3RZvcR2NCjBlZuU/exec";
+const FILAS = ["A","B","C","D"];
+const COLUMNAS = [1,2,3,4];
+
+function jsonp(url) {
+  return new Promise(resolve => {
+    const cb = "cb" + Math.random().toString(36).substring(2);
+    window[cb] = data => {
+      delete window[cb];
+      script.remove();
+      resolve(data);
+    };
+    const script = document.createElement("script");
+    script.src = url + "&callback=" + cb;
+    document.body.appendChild(script);
+  });
+}
+
+async function cargar() {
+  const alm = document.getElementById("almacen").value;
+  document.getElementById("estado").textContent = "Cargando…";
+
+  const res = await jsonp(`${SCRIPT_URL}?action=get&almacen=${alm}`);
+  const data = res.data || [];
+
+  pintar(data);
+  document.getElementById("estado").textContent =
+    `Cargadas ${data.length} ubicaciones`;
+}
+
+function pintar(data) {
+  const grid = document.getElementById("grid");
+  grid.innerHTML = "";
+
+  grid.append("", ...COLUMNAS.map(c => header("Col " + c)));
+
+  FILAS.forEach(f => {
+    grid.append(rowLabel("Fila " + f));
+
+    COLUMNAS.forEach(c => {
+      const u = data.find(x => x.FILA === f && x.COLUMNA === c);
+      const estado = (u && u.ESTADO === "VACIO") ? "vacio" : "ocupado";
+
+      const div = document.createElement("div");
+      div.className = "cell " + estado;
+      div.innerHTML = `
+        <div class="code">${u?.UBICACION_CODIGO || ""}</div>
+        <div>${u?.PRODUCTO || "— vacío —"}</div>
+        <div class="muted">${u?.CANTIDAD || ""} ${u?.UNIDAD || ""}</div>
+      `;
+      grid.append(div);
+    });
+  });
+}
+
+function header(t) {
+  const d = document.createElement("div");
+  d.className = "header";
+  d.textContent = t;
+  return d;
+}
+
+function rowLabel(t) {
+  const d = document.createElement("div");
+  d.className = "rowlabel";
+  d.textContent = t;
+  return d;
+}
+
+cargar();
+</script>
+
+</body>
+</html>
