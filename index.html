@@ -6,88 +6,108 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <style>
-body {
-  font-family: system-ui, Arial, sans-serif;
-  margin: 20px;
-  max-width: 1100px;
-}
+body{font-family:system-ui,Arial,sans-serif;margin:20px;max-width:1200px}
+.top{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+select,input,button,textarea{padding:9px 12px;font-size:14px;border:1px solid #ccc;border-radius:10px}
+button{cursor:pointer}
+.muted{color:#666;font-size:12px}
 
-.top {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-}
+.grid{margin-top:18px;display:grid;grid-template-columns:110px repeat(4, 1fr);gap:12px;align-items:stretch}
+.header{font-weight:700;text-align:center}
+.rowlabel{font-weight:700;text-align:center;display:flex;align-items:center;justify-content:center;border:1px dashed #ddd;border-radius:14px}
 
-select, button {
-  padding: 8px 12px;
-  font-size: 14px;
-}
+.cell{border-radius:14px;padding:12px;min-height:92px;border:1px solid #ccc;display:flex;flex-direction:column;gap:6px}
+.cell:hover{outline:2px solid rgba(0,0,0,.08)}
+.vacio{background:#f2f2f2}
+.ocupado{background:#e6f4ea}
+.bloqueado{background:#fdecea}
 
-.grid {
-  margin-top: 20px;
-  display: grid;
-  grid-template-columns: 80px repeat(4, 1fr);
-  gap: 10px;
-}
+.code{font-weight:800}
+.small{font-size:12px;color:#444}
 
-.header, .rowlabel {
-  font-weight: bold;
-  text-align: center;
-}
+.legend{margin-top:10px;display:flex;gap:10px;flex-wrap:wrap}
+.pill{display:inline-block;padding:3px 10px;border-radius:999px;border:1px solid #ddd;font-size:12px}
+.pV{background:#f2f2f2}
+.pO{background:#e6f4ea}
+.pB{background:#fdecea}
 
-.cell {
-  border-radius: 12px;
-  padding: 10px;
-  min-height: 80px;
-  border: 1px solid #ccc;
-}
-
-.vacio {
-  background: #f2f2f2;
-}
-
-.ocupado {
-  background: #e6f4ea;
-}
-
-.code {
-  font-weight: bold;
-}
-
-.muted {
-  color: #666;
-  font-size: 12px;
-}
+/* Modal */
+.backdrop{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;padding:18px}
+.modal{background:#fff;border-radius:16px;border:1px solid #eee;max-width:560px;width:100%;padding:16px}
+.modal h3{margin:0 0 6px 0}
+.form{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+.full{grid-column:1/-1}
+.actions{display:flex;gap:10px;justify-content:flex-end;margin-top:12px}
 </style>
 </head>
 
 <body>
 
 <div class="top">
-  <h2>Almacén Virtual</h2>
+  <h2 style="margin:0">Almacén Virtual</h2>
 
-  <select id="almacen">
-    <option value="ALM1">ALM1</option>
-    <option value="ALM2">ALM2</option>
-  </select>
+  <label>
+    Almacén:
+    <select id="almacen">
+      <option value="ALM1">ALM1</option>
+      <option value="ALM2">ALM2</option>
+    </select>
+  </label>
 
-  <button onclick="cargar()">Actualizar</button>
-  <span id="estado" class="muted">Cargando…</span>
+  <label>
+    Usuario:
+    <input id="usuario" placeholder="Ej: Carlos" />
+  </label>
+
+  <button id="btnActualizar">Actualizar</button>
+  <span id="estado" class="muted">—</span>
+</div>
+
+<div class="legend">
+  <span class="pill pV">VACIO</span>
+  <span class="pill pO">OCUPADO</span>
+  <span class="pill pB">BLOQUEADO</span>
 </div>
 
 <div id="grid" class="grid"></div>
 
+<!-- MODAL -->
+<div id="backdrop" class="backdrop">
+  <div class="modal">
+    <h3 id="mTitle">Editar ubicación</h3>
+    <div id="mSub" class="muted"></div>
+
+    <div class="form">
+      <input id="mProducto" class="full" placeholder="Producto" />
+      <input id="mCantidad" placeholder="Cantidad" />
+      <input id="mUnidad" placeholder="Unidad (caja, uds, kg...)" />
+      <input id="mLote" placeholder="Lote" />
+      <input id="mFecha" placeholder="Fecha entrada (YYYY-MM-DD)" />
+      <select id="mEstado">
+        <option value="">(auto)</option>
+        <option value="VACIO">VACIO</option>
+        <option value="OCUPADO">OCUPADO</option>
+        <option value="BLOQUEADO">BLOQUEADO</option>
+      </select>
+      <textarea id="mObs" class="full" rows="3" placeholder="Observaciones"></textarea>
+      <input id="mNota" class="full" placeholder="Nota para MOVIMIENTOS (opcional)" />
+    </div>
+
+    <div class="actions">
+      <button id="mCancel">Cancelar</button>
+      <button id="mSave">Guardar</button>
+    </div>
+  </div>
+</div>
+
 <script>
-/********************
- * CONFIG
- ********************/
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz_XjZgMWd3LjbY0H7PfHyNi38CBGLhghoKkoi2Q6xkHv7IXGYYr3RZvcR2NCjBlZuU/exec";
 const FILAS = ["A","B","C","D"];
 const COLUMNAS = [1,2,3,4];
 
-/********************
- * JSONP HELPER
- ********************/
+let cache = [];
+let selected = null;
+
 function jsonp(url){
   return new Promise((resolve, reject) => {
     const cb = "cb_" + Math.random().toString(36).slice(2);
@@ -111,74 +131,159 @@ function jsonp(url){
   });
 }
 
-/********************
- * LOAD DATA
- ********************/
-async function cargar() {
-  const alm = document.getElementById("almacen").value;
-  document.getElementById("estado").textContent = "Cargando…";
+function setStatus(t){ document.getElementById("estado").textContent = t; }
 
-  try {
+async function cargar(){
+  const alm = document.getElementById("almacen").value;
+  setStatus("Cargando…");
+
+  try{
     const url = `${SCRIPT_URL}?action=get&almacen=${encodeURIComponent(alm)}`;
     const res = await jsonp(url);
 
-    if (!res || !res.ok) {
-      throw new Error("Respuesta inválida");
-    }
+    if (!res || !res.ok) throw new Error(res?.error || "Respuesta inválida");
 
-    pintar(res.data || []);
-    document.getElementById("estado").textContent =
-      `OK · ${res.data.length} ubicaciones`;
-
-  } catch (err) {
+    cache = res.data || [];
+    pintar(cache);
+    setStatus(`Cargadas ${cache.length} ubicaciones`);
+  }catch(err){
     console.error(err);
-    document.getElementById("estado").textContent = "Error al cargar";
+    setStatus("Error: " + err.message);
   }
 }
 
-/********************
- * DRAW GRID
- ********************/
-function pintar(data) {
+function claseEstado(estado){
+  const e = String(estado || "").toUpperCase().trim();
+  if (e === "BLOQUEADO") return "bloqueado";
+  if (e === "VACIO") return "vacio";
+  return "ocupado";
+}
+
+function pintar(data){
   const grid = document.getElementById("grid");
   grid.innerHTML = "";
 
-  // Header
-  grid.appendChild(cell("",""));
-  COLUMNAS.forEach(c => grid.appendChild(cell("header","Col " + c)));
+  grid.appendChild(cellDiv("header",""));
+  COLUMNAS.forEach(c => grid.appendChild(cellDiv("header","Col " + c)));
 
-  // Rows
   FILAS.forEach(f => {
-    grid.appendChild(cell("rowlabel","Fila " + f));
+    grid.appendChild(cellDiv("rowlabel","Fila " + f));
 
     COLUMNAS.forEach(c => {
-      const u = data.find(x => x.FILA === f && Number(x.COLUMNA) === c);
-      const estado = u && u.ESTADO === "VACIO" ? "vacio" : "ocupado";
+      const u = data.find(x => x.FILA === f && Number(x.COLUMNA) === c) || null;
+      const code = u ? u.UBICACION_CODIGO : "";
+      const estado = u ? u.ESTADO : "VACIO";
 
       const div = document.createElement("div");
-      div.className = "cell " + estado;
+      div.className = "cell " + claseEstado(estado);
+
+      const producto = u?.PRODUCTO ? escapeHtml(u.PRODUCTO) : "— vacío —";
+      const qtyUnit = ((u?.CANTIDAD || "") + " " + (u?.UNIDAD || "")).trim();
 
       div.innerHTML = `
-        <div class="code">${u?.UBICACION_CODIGO || ""}</div>
-        <div>${u?.PRODUCTO || "— vacío —"}</div>
-        <div class="muted">${u?.CANTIDAD || ""} ${u?.UNIDAD || ""}</div>
+        <div class="code">${escapeHtml(code)}</div>
+        <div>${producto}</div>
+        <div class="muted">${escapeHtml(qtyUnit)}</div>
+        <div class="small muted">${escapeHtml(String(estado || ""))}</div>
       `;
 
+      div.addEventListener("click", () => abrirModal(u));
       grid.appendChild(div);
     });
   });
 }
 
-function cell(cls, text) {
+function cellDiv(cls, text){
   const d = document.createElement("div");
-  if (cls) d.className = cls;
+  d.className = cls;
   d.textContent = text;
   return d;
 }
 
-/********************
- * INIT
- ********************/
+function escapeHtml(s){
+  return String(s ?? "").replace(/[&<>"']/g, m => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
+  }[m]));
+}
+
+/* Modal */
+const backdrop = document.getElementById("backdrop");
+const mTitle = document.getElementById("mTitle");
+const mSub = document.getElementById("mSub");
+const mProducto = document.getElementById("mProducto");
+const mCantidad = document.getElementById("mCantidad");
+const mUnidad = document.getElementById("mUnidad");
+const mLote = document.getElementById("mLote");
+const mFecha = document.getElementById("mFecha");
+const mEstado = document.getElementById("mEstado");
+const mObs = document.getElementById("mObs");
+const mNota = document.getElementById("mNota");
+
+document.getElementById("mCancel").addEventListener("click", cerrarModal);
+backdrop.addEventListener("click", (e)=>{ if(e.target === backdrop) cerrarModal(); });
+document.getElementById("mSave").addEventListener("click", guardarModal);
+
+function abrirModal(u){
+  selected = u;
+  mTitle.textContent = `Editar ${u.UBICACION_CODIGO}`;
+  mSub.textContent = `Almacén ${u.ALMACEN} · Fila ${u.FILA} · Col ${u.COLUMNA}`;
+
+  mProducto.value = u.PRODUCTO || "";
+  mCantidad.value = u.CANTIDAD || "";
+  mUnidad.value = u.UNIDAD || "";
+  mLote.value = u.LOTE || "";
+  mFecha.value = u.FECHA_ENTRADA ? String(u.FECHA_ENTRADA).slice(0,10) : "";
+  mEstado.value = ""; // auto por defecto
+  mObs.value = u.OBSERVACIONES || "";
+  mNota.value = "";
+
+  backdrop.style.display = "flex";
+}
+
+function cerrarModal(){
+  backdrop.style.display = "none";
+  selected = null;
+}
+
+async function guardarModal(){
+  if (!selected) return;
+
+  const usuario = document.getElementById("usuario").value.trim();
+
+  const payload = {
+    ubicacion_codigo: selected.UBICACION_CODIGO,
+    producto: mProducto.value.trim(),
+    cantidad: mCantidad.value.trim(),
+    unidad: mUnidad.value.trim(),
+    lote: mLote.value.trim(),
+    fecha_entrada: mFecha.value.trim(),
+    estado: mEstado.value,           // "" => auto
+    observaciones: mObs.value.trim(),
+    usuario: usuario,
+    nota: mNota.value.trim()
+  };
+
+  setStatus("Guardando…");
+
+  try{
+    const dataParam = encodeURIComponent(JSON.stringify(payload));
+    const url = `${SCRIPT_URL}?action=update&data=${dataParam}`;
+    const res = await jsonp(url);
+
+    if (!res || !res.ok) throw new Error(res?.error || "No se pudo guardar");
+
+    cerrarModal();
+    await cargar();
+    setStatus("Guardado ✅");
+  }catch(err){
+    console.error(err);
+    setStatus("Error guardando: " + err.message);
+  }
+}
+
+/* Init */
+document.getElementById("btnActualizar").addEventListener("click", cargar);
+document.getElementById("almacen").addEventListener("change", cargar);
 cargar();
 </script>
 
