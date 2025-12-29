@@ -257,7 +257,7 @@ async function guardarModal(){
     unidad: mUnidad.value.trim(),
     lote: mLote.value.trim(),
     fecha_entrada: mFecha.value.trim(),
-    estado: mEstado.value,           // "" => auto
+    estado: mEstado.value,
     observaciones: mObs.value.trim(),
     usuario: usuario,
     nota: mNota.value.trim()
@@ -281,7 +281,6 @@ async function guardarModal(){
   }
 }
 
-/* Init */
 document.getElementById("btnActualizar").addEventListener("click", cargar);
 document.getElementById("almacen").addEventListener("change", cargar);
 cargar();
