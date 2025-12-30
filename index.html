@@ -59,7 +59,15 @@ button{cursor:pointer}
 .form{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
 .full{grid-column:1/-1}
 .actions{display:flex;gap:10px;justify-content:flex-end;margin-top:12px}
+
+/* Contenedor capturable */
+#captureArea{
+  background:#fff;
+}
 </style>
+
+<!-- ✅ Librería para capturar pantalla -->
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 </head>
 
 <body>
@@ -81,30 +89,33 @@ button{cursor:pointer}
   </label>
 
   <button id="btnActualizar">Actualizar</button>
+  <button id="btnCaptura">Guardar captura</button>
   <span id="estado" class="muted">—</span>
 </div>
 
-<div class="legend">
-  <span class="pill pV">VACIO</span>
-  <span class="pill pOK">OK</span>
-  <span class="pill pB">BLOQUEADO</span>
-  <span class="pill pR">REVISIÓN</span>
+<div id="captureArea">
+  <div class="legend">
+    <span class="pill pV">VACIO</span>
+    <span class="pill pOK">OK</span>
+    <span class="pill pB">BLOQUEADO</span>
+    <span class="pill pR">REVISIÓN</span>
+  </div>
+
+  <div id="grid" class="grid"></div>
+
+  <h3 style="margin:18px 0 0 0">Resumen de inventario (Producto + Lote)</h3>
+  <table id="tablaResumen">
+    <thead>
+      <tr>
+        <th>Producto</th>
+        <th>Lote</th>
+        <th>Cantidad total</th>
+        <th>Unidad</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
 </div>
-
-<div id="grid" class="grid"></div>
-
-<h3 style="margin:18px 0 0 0">Resumen de inventario (Producto + Lote)</h3>
-<table id="tablaResumen">
-  <thead>
-    <tr>
-      <th>Producto</th>
-      <th>Lote</th>
-      <th>Cantidad total</th>
-      <th>Unidad</th>
-    </tr>
-  </thead>
-  <tbody></tbody>
-</table>
 
 <!-- MODAL -->
 <div id="backdrop" class="backdrop">
@@ -146,6 +157,14 @@ const COLUMNAS = [1,2,3,4];
 let cache = [];
 let selected = null;
 
+function escapeHtml(s){
+  return String(s ?? "").replace(/[&<>"']/g, m => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
+  }[m]));
+}
+
+function setStatus(t){ document.getElementById("estado").textContent = t; }
+
 /* JSONP */
 function jsonp(url){
   return new Promise((resolve, reject) => {
@@ -156,24 +175,6 @@ function jsonp(url){
     s.src = url + (url.includes("?") ? "&" : "?") + "callback=" + cb;
     document.body.appendChild(s);
   });
-}
-
-function setStatus(t){ document.getElementById("estado").textContent = t; }
-
-/* ✅ Helper: pilla el primer campo existente aunque venga con nombres raros */
-function pick(obj, keys, def=""){
-  if (!obj) return def;
-  for (const k of keys){
-    if (Object.prototype.hasOwnProperty.call(obj, k)) return obj[k];
-  }
-  return def;
-}
-function normStr(v){ return String(v ?? "").trim(); }
-
-function escapeHtml(s){
-  return String(s ?? "").replace(/[&<>"']/g, m => ({
-    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
-  }[m]));
 }
 
 async function cargar(){
@@ -200,7 +201,9 @@ function claseEstado(estado){
   return "vacio";
 }
 
-/* Pintar grid */
+function div(c,t){const d=document.createElement("div");d.className=c;d.textContent=t;return d}
+
+/* Grid */
 function pintar(data){
   const g = document.getElementById("grid");
   g.innerHTML = "";
@@ -211,21 +214,16 @@ function pintar(data){
   FILAS.forEach(f=>{
     g.appendChild(div("rowlabel","Fila "+f));
     COLUMNAS.forEach(c=>{
-      const u = data.find(x=>x.FILA===f && Number(x.COLUMNA)===c) || {};
+      const u = data.find(x=>x.FILA===f && Number(x.COLUMNA)===c);
 
-      const codigo = normStr(pick(u, ["UBICACION_CODIGO","UBICACIÓN_CÓDIGO","UBICACION CODIGO","ubicacion_codigo"], ""));
-      const productoRaw = normStr(pick(u, ["PRODUCTO","producto"], ""));
-      const producto = productoRaw ? productoRaw : "— vacío —";
+      const codigo = u?.UBICACION_CODIGO || "";
+      const producto = (u?.PRODUCTO || "").trim() ? u.PRODUCTO : "— vacío —";
+      const qtyUnit = ((u?.CANTIDAD || "") + " " + (u?.UNIDAD || "")).trim();
 
-      const cantidad = normStr(pick(u, ["CANTIDAD","cantidad"], ""));
-      const unidad = normStr(pick(u, ["UNIDAD","unidad"], ""));
-      const qtyUnit = (cantidad + " " + unidad).trim();
-
-      // ✅ LOTE robusto
-      const lote = normStr(pick(u, ["LOTE","Lote","lote","LOTE "], ""));
+      const lote = (u?.LOTE || "").trim();
       const loteTxt = lote ? `Lote: ${lote}` : "";
 
-      const est = normStr(pick(u, ["ESTADO","estado"], "VACIO")) || "VACIO";
+      const est = (u?.ESTADO || "VACIO");
 
       const d = document.createElement("div");
       d.className = "cell " + claseEstado(est);
@@ -242,7 +240,7 @@ function pintar(data){
   });
 }
 
-/* Resumen: PRODUCTO + LOTE (+ UNIDAD) */
+/* Resumen producto + lote */
 function pintarResumen(data){
   const tbody = document.querySelector("#tablaResumen tbody");
   tbody.innerHTML = "";
@@ -250,13 +248,13 @@ function pintarResumen(data){
   const resumen = {};
 
   data.forEach(u=>{
-    const producto = normStr(pick(u, ["PRODUCTO","producto"], ""));
+    const producto = (u?.PRODUCTO || "").trim();
     if (!producto) return;
 
-    const lote = normStr(pick(u, ["LOTE","Lote","lote","LOTE "], ""));
-    const unidad = normStr(pick(u, ["UNIDAD","unidad"], ""));
+    const lote = (u?.LOTE || "").trim();
+    const unidad = (u?.UNIDAD || "").trim();
 
-    const cantRaw = normStr(pick(u, ["CANTIDAD","cantidad"], ""));
+    const cantRaw = String(u?.CANTIDAD || "").trim();
     if (!cantRaw) return;
 
     const cant = Number(cantRaw.replace(",", "."));
@@ -294,32 +292,22 @@ function pintarResumen(data){
   });
 }
 
-function div(c,t){const d=document.createElement("div");d.className=c;d.textContent=t;return d}
-
 /* Modal */
 const bd = document.getElementById("backdrop");
 const mEstado = document.getElementById("mEstado");
 
 function abrirModal(u){
-  selected=u || {};
-
-  const codigo = normStr(pick(selected, ["UBICACION_CODIGO","UBICACIÓN_CÓDIGO","UBICACION CODIGO","ubicacion_codigo"], ""));
-  document.getElementById("mTitle").textContent = "Editar " + codigo;
-
-  const fila = normStr(pick(selected, ["FILA","fila"], ""));
-  const col = normStr(pick(selected, ["COLUMNA","columna"], ""));
-  document.getElementById("mSub").textContent = `Fila ${fila} · Col ${col}`;
-
-  mEstado.value = "";
-
-  document.getElementById("mProducto").value = normStr(pick(selected, ["PRODUCTO","producto"], ""));
-  document.getElementById("mCantidad").value = normStr(pick(selected, ["CANTIDAD","cantidad"], ""));
-  document.getElementById("mUnidad").value = normStr(pick(selected, ["UNIDAD","unidad"], ""));
-  document.getElementById("mLote").value   = normStr(pick(selected, ["LOTE","Lote","lote","LOTE "], ""));
-  document.getElementById("mFecha").value  = normStr(pick(selected, ["FECHA_ENTRADA","fecha_entrada"], ""));
-  document.getElementById("mObs").value    = normStr(pick(selected, ["OBSERVACIONES","observaciones"], ""));
-  document.getElementById("mNota").value   = "";
-
+  selected=u;
+  document.getElementById("mTitle").textContent="Editar "+u.UBICACION_CODIGO;
+  document.getElementById("mSub").textContent=`Fila ${u.FILA} · Col ${u.COLUMNA}`;
+  mEstado.value="";
+  document.getElementById("mProducto").value=u.PRODUCTO||"";
+  document.getElementById("mCantidad").value=u.CANTIDAD||"";
+  document.getElementById("mUnidad").value=u.UNIDAD||"";
+  document.getElementById("mLote").value=u.LOTE||"";
+  document.getElementById("mFecha").value=u.FECHA_ENTRADA||"";
+  document.getElementById("mObs").value=u.OBSERVACIONES||"";
+  document.getElementById("mNota").value="";
   bd.style.display="flex";
 }
 
@@ -327,24 +315,19 @@ document.getElementById("mCancel").onclick=()=>bd.style.display="none";
 bd.addEventListener("click",(e)=>{ if(e.target===bd) bd.style.display="none"; });
 
 document.getElementById("mSave").onclick=async ()=>{
-  const usuario = document.getElementById("usuario").value.trim();
+  if(!selected) return;
 
-  const ubic = normStr(pick(selected, ["UBICACION_CODIGO","UBICACIÓN_CÓDIGO","UBICACION CODIGO","ubicacion_codigo"], ""));
-  const loteVal = document.getElementById("mLote").value.trim();
-
-  // ✅ Enviamos doble clave: lote y LOTE
-  const payload = {
-    ubicacion_codigo: ubic,
-    producto: document.getElementById("mProducto").value.trim(),
-    cantidad: document.getElementById("mCantidad").value.trim(),
-    unidad:   document.getElementById("mUnidad").value.trim(),
-    lote:     loteVal,
-    LOTE:     loteVal,
-    fecha_entrada: document.getElementById("mFecha").value.trim(),
-    estado:   mEstado.value,
-    observaciones: document.getElementById("mObs").value.trim(),
-    usuario,
-    nota: document.getElementById("mNota").value.trim()
+  const payload={
+    ubicacion_codigo:selected.UBICACION_CODIGO,
+    producto:document.getElementById("mProducto").value.trim(),
+    cantidad:document.getElementById("mCantidad").value.trim(),
+    unidad:document.getElementById("mUnidad").value.trim(),
+    lote:document.getElementById("mLote").value.trim(),
+    fecha_entrada:document.getElementById("mFecha").value.trim(),
+    estado:mEstado.value,
+    observaciones:document.getElementById("mObs").value.trim(),
+    usuario:document.getElementById("usuario").value.trim(),
+    nota:document.getElementById("mNota").value.trim()
   };
 
   setStatus("Guardando…");
@@ -357,6 +340,51 @@ document.getElementById("mSave").onclick=async ()=>{
   }catch(e){
     console.error(e);
     setStatus("Error guardando: " + e.message);
+  }
+};
+
+/* ✅ CAPTURA Y SUBIDA A DRIVE */
+function pad2(n){ return String(n).padStart(2,"0"); }
+function todayFolder(){
+  const d = new Date();
+  return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+}
+function timestampName(){
+  const d = new Date();
+  return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}_${pad2(d.getHours())}${pad2(d.getMinutes())}${pad2(d.getSeconds())}`;
+}
+
+document.getElementById("btnCaptura").onclick = async ()=>{
+  try{
+    const alm = document.getElementById("almacen").value;
+    const dateFolder = todayFolder();
+    const filename = `${alm}_${timestampName()}.png`;
+
+    setStatus("Generando captura…");
+
+    const area = document.getElementById("captureArea");
+    const canvas = await html2canvas(area, { scale: 2, useCORS: true });
+    const imageData = canvas.toDataURL("image/png");
+
+    setStatus("Subiendo a Drive…");
+
+    const resp = await fetch(SCRIPT_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ almacen: alm, dateFolder, filename, imageData })
+    });
+
+    const json = await resp.json();
+    if (!json.ok) throw new Error(json.error || "No se pudo guardar en Drive");
+
+    setStatus(`Captura guardada ✅ (${json.folderName})`);
+    // opcional: abrir el archivo
+    window.open(json.fileUrl, "_blank");
+
+  }catch(err){
+    console.error(err);
+    setStatus("Error captura: " + err.message);
+    alert("Error guardando captura: " + err.message);
   }
 };
 
