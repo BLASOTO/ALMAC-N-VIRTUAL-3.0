@@ -136,20 +136,21 @@ async function cargar(){
   const alm = document.getElementById("almacen").value;
   setStatus("Cargando…");
   try{
-    const res = await jsonp(`${SCRIPT_URL}?action=get&almacen=${alm}`);
+    const res = await jsonp(`${SCRIPT_URL}?action=get&almacen=${encodeURIComponent(alm)}`);
+    if (!res || !res.ok) throw new Error(res?.error || "Respuesta inválida");
     cache = res.data || [];
     pintar(cache);
     setStatus(`Cargadas ${cache.length} ubicaciones`);
   }catch(e){
-    setStatus("Error");
+    setStatus("Error: " + e.message);
     console.error(e);
   }
 }
 
 /* Estado → clase */
 function claseEstado(estado){
-  const e = String(estado||"").toUpperCase();
-  if (e === "OK") return "ok";
+  const e = String(estado||"").toUpperCase().trim();
+  if (e === "OK" || e === "OCUPADO") return "ok";               // compatibilidad
   if (e === "BLOQUEADO") return "bloqueado";
   if (e === "REVISIÓN" || e === "REVISION") return "revision";
   return "vacio";
@@ -167,12 +168,18 @@ function pintar(data){
     g.appendChild(div("rowlabel","Fila "+f));
     COLUMNAS.forEach(c=>{
       const u = data.find(x=>x.FILA===f && Number(x.COLUMNA)===c);
+      const codigo = u?.UBICACION_CODIGO || "";
+      const producto = (u?.PRODUCTO || "").trim() ? u.PRODUCTO : "— vacío —";
+      const qtyUnit = ((u?.CANTIDAD || "") + " " + (u?.UNIDAD || "")).trim();
+      const est = (u?.ESTADO || "VACIO");
+
       const d = document.createElement("div");
-      d.className = "cell " + claseEstado(u?.ESTADO);
+      d.className = "cell " + claseEstado(est);
       d.innerHTML = `
-        <div class="code">${u?.UBICACION_CODIGO||""}</div>
-        <div>${u?.PRODUCTO||"— vacío —"}</div>
-        <div class="small muted">${u?.ESTADO||"VACIO"}</div>
+        <div class="code">${escapeHtml(codigo)}</div>
+        <div>${escapeHtml(producto)}</div>
+        <div class="muted">${escapeHtml(qtyUnit)}</div>
+        <div class="small muted">${escapeHtml(est)}</div>
       `;
       d.onclick = ()=>abrirModal(u);
       g.appendChild(d);
@@ -181,6 +188,11 @@ function pintar(data){
 }
 
 function div(c,t){const d=document.createElement("div");d.className=c;d.textContent=t;return d}
+function escapeHtml(s){
+  return String(s ?? "").replace(/[&<>"']/g, m => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
+  }[m]));
+}
 
 /* Modal */
 const bd = document.getElementById("backdrop");
@@ -202,23 +214,35 @@ function abrirModal(u){
 }
 
 document.getElementById("mCancel").onclick=()=>bd.style.display="none";
+bd.addEventListener("click",(e)=>{ if(e.target===bd) bd.style.display="none"; });
 
 document.getElementById("mSave").onclick=async ()=>{
+  if(!selected) return;
+
   const payload={
     ubicacion_codigo:selected.UBICACION_CODIGO,
-    producto:document.getElementById("mProducto").value,
-    cantidad:document.getElementById("mCantidad").value,
-    unidad:document.getElementById("mUnidad").value,
-    lote:document.getElementById("mLote").value,
-    fecha_entrada:document.getElementById("mFecha").value,
+    producto:document.getElementById("mProducto").value.trim(),
+    cantidad:document.getElementById("mCantidad").value.trim(),
+    unidad:document.getElementById("mUnidad").value.trim(),
+    lote:document.getElementById("mLote").value.trim(),
+    fecha_entrada:document.getElementById("mFecha").value.trim(),
     estado:mEstado.value,
-    observaciones:document.getElementById("mObs").value,
-    usuario:document.getElementById("usuario").value,
-    nota:document.getElementById("mNota").value
+    observaciones:document.getElementById("mObs").value.trim(),
+    usuario:document.getElementById("usuario").value.trim(),
+    nota:document.getElementById("mNota").value.trim()
   };
-  await jsonp(`${SCRIPT_URL}?action=update&data=${encodeURIComponent(JSON.stringify(payload))}`);
-  bd.style.display="none";
-  cargar();
+
+  setStatus("Guardando…");
+  try{
+    const res = await jsonp(`${SCRIPT_URL}?action=update&data=${encodeURIComponent(JSON.stringify(payload))}`);
+    if (!res || !res.ok) throw new Error(res?.error || "No se pudo guardar");
+    bd.style.display="none";
+    await cargar();
+    setStatus("Guardado ✅");
+  }catch(e){
+    console.error(e);
+    setStatus("Error guardando: " + e.message);
+  }
 };
 
 document.getElementById("btnActualizar").onclick=cargar;
