@@ -40,7 +40,7 @@ button{cursor:pointer}
 #tablaResumen{
   border-collapse:collapse;
   margin-top:18px;
-  min-width:520px;
+  min-width:680px;
 }
 #tablaResumen th,#tablaResumen td{
   border:1px solid #ddd;
@@ -99,6 +99,7 @@ button{cursor:pointer}
   <thead>
     <tr>
       <th>Producto</th>
+      <th>Lote</th>
       <th>Cantidad total</th>
       <th>Unidad</th>
     </tr>
@@ -169,7 +170,7 @@ async function cargar(){
     if (!res || !res.ok) throw new Error(res?.error || "Respuesta inválida");
     cache = res.data || [];
     pintar(cache);
-    pintarResumen(cache); // ✅ NUEVO
+    pintarResumen(cache); // ✅ Agrupa por producto-lote
     setStatus(`Cargadas ${cache.length} ubicaciones`);
   }catch(e){
     setStatus("Error: " + e.message);
@@ -223,36 +224,44 @@ function pintar(data){
   });
 }
 
-/* ✅ Resumen inventario: suma por producto */
+/* ✅ Resumen inventario: suma por PRODUCTO + LOTE (+ UNIDAD para no mezclar) */
 function pintarResumen(data){
   const tbody = document.querySelector("#tablaResumen tbody");
   tbody.innerHTML = "";
 
-  // key: producto||unidad (para no mezclar unidades distintas)
+  // key: producto||lote||unidad
   const resumen = {};
 
   data.forEach(u=>{
     const producto = (u?.PRODUCTO || "").trim();
     if (!producto) return;
 
+    const lote = (u?.LOTE || "").trim();
     const unidad = (u?.UNIDAD || "").trim();
+
     const cantRaw = String(u?.CANTIDAD || "").trim();
     if (!cantRaw) return;
 
     const cant = Number(cantRaw.replace(",", "."));
     if (!isFinite(cant) || cant === 0) return;
 
-    const key = `${producto}||${unidad}`;
-    if (!resumen[key]) resumen[key] = { producto, unidad, total: 0 };
+    const key = `${producto}||${lote}||${unidad}`;
+    if (!resumen[key]) resumen[key] = { producto, lote, unidad, total: 0 };
     resumen[key].total += cant;
   });
 
   const items = Object.values(resumen)
-    .sort((a,b)=> a.producto.localeCompare(b.producto));
+    .sort((a,b)=>{
+      const p = a.producto.localeCompare(b.producto);
+      if (p !== 0) return p;
+      const l = a.lote.localeCompare(b.lote);
+      if (l !== 0) return l;
+      return a.unidad.localeCompare(b.unidad);
+    });
 
   if (items.length === 0){
     const tr = document.createElement("tr");
-    tr.innerHTML = `<td colspan="3" class="muted">Sin stock (no hay cantidades registradas)</td>`;
+    tr.innerHTML = `<td colspan="4" class="muted">Sin stock (no hay cantidades registradas)</td>`;
     tbody.appendChild(tr);
     return;
   }
@@ -261,6 +270,7 @@ function pintarResumen(data){
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${escapeHtml(it.producto)}</td>
+      <td>${escapeHtml(it.lote || "—")}</td>
       <td>${escapeHtml(it.total)}</td>
       <td>${escapeHtml(it.unidad)}</td>
     `;
