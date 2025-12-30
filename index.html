@@ -156,7 +156,7 @@ function claseEstado(estado){
   return "vacio";
 }
 
-/* Pintar grid */
+/* Pintar grid (✅ incluye LOTE visible) */
 function pintar(data){
   const g = document.getElementById("grid");
   g.innerHTML = "";
@@ -168,9 +168,15 @@ function pintar(data){
     g.appendChild(div("rowlabel","Fila "+f));
     COLUMNAS.forEach(c=>{
       const u = data.find(x=>x.FILA===f && Number(x.COLUMNA)===c);
+
       const codigo = u?.UBICACION_CODIGO || "";
       const producto = (u?.PRODUCTO || "").trim() ? u.PRODUCTO : "— vacío —";
       const qtyUnit = ((u?.CANTIDAD || "") + " " + (u?.UNIDAD || "")).trim();
+
+      // ✅ NUEVO: lote visible en la tarjeta
+      const lote = (u?.LOTE || "").trim();
+      const loteTxt = lote ? `Lote: ${lote}` : "";
+
       const est = (u?.ESTADO || "VACIO");
 
       const d = document.createElement("div");
@@ -179,6 +185,7 @@ function pintar(data){
         <div class="code">${escapeHtml(codigo)}</div>
         <div>${escapeHtml(producto)}</div>
         <div class="muted">${escapeHtml(qtyUnit)}</div>
+        ${loteTxt ? `<div class="muted">${escapeHtml(loteTxt)}</div>` : ``}
         <div class="small muted">${escapeHtml(est)}</div>
       `;
       d.onclick = ()=>abrirModal(u);
