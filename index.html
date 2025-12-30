@@ -36,11 +36,11 @@ button{cursor:pointer}
 .pB{background:#fdecea}
 .pR{background:#fff7e6}
 
-/* ✅ Tabla resumen */
+/* Tabla resumen */
 #tablaResumen{
   border-collapse:collapse;
   margin-top:18px;
-  min-width:680px;
+  min-width:700px;
 }
 #tablaResumen th,#tablaResumen td{
   border:1px solid #ddd;
@@ -93,8 +93,7 @@ button{cursor:pointer}
 
 <div id="grid" class="grid"></div>
 
-<!-- ✅ Resumen inventario -->
-<h3 style="margin:18px 0 0 0">Resumen de inventario</h3>
+<h3 style="margin:18px 0 0 0">Resumen de inventario (Producto + Lote)</h3>
 <table id="tablaResumen">
   <thead>
     <tr>
@@ -161,7 +160,22 @@ function jsonp(url){
 
 function setStatus(t){ document.getElementById("estado").textContent = t; }
 
-/* Cargar */
+/* ✅ Helper: pilla el primer campo existente aunque venga con nombres raros */
+function pick(obj, keys, def=""){
+  if (!obj) return def;
+  for (const k of keys){
+    if (Object.prototype.hasOwnProperty.call(obj, k)) return obj[k];
+  }
+  return def;
+}
+function normStr(v){ return String(v ?? "").trim(); }
+
+function escapeHtml(s){
+  return String(s ?? "").replace(/[&<>"']/g, m => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
+  }[m]));
+}
+
 async function cargar(){
   const alm = document.getElementById("almacen").value;
   setStatus("Cargando…");
@@ -170,7 +184,7 @@ async function cargar(){
     if (!res || !res.ok) throw new Error(res?.error || "Respuesta inválida");
     cache = res.data || [];
     pintar(cache);
-    pintarResumen(cache); // ✅ Agrupa por producto-lote
+    pintarResumen(cache);
     setStatus(`Cargadas ${cache.length} ubicaciones`);
   }catch(e){
     setStatus("Error: " + e.message);
@@ -178,16 +192,15 @@ async function cargar(){
   }
 }
 
-/* Estado → clase */
 function claseEstado(estado){
   const e = String(estado||"").toUpperCase().trim();
-  if (e === "OK" || e === "OCUPADO") return "ok";               // compatibilidad
+  if (e === "OK" || e === "OCUPADO") return "ok";
   if (e === "BLOQUEADO") return "bloqueado";
   if (e === "REVISIÓN" || e === "REVISION") return "revision";
   return "vacio";
 }
 
-/* Pintar grid (incluye LOTE) */
+/* Pintar grid */
 function pintar(data){
   const g = document.getElementById("grid");
   g.innerHTML = "";
@@ -198,16 +211,21 @@ function pintar(data){
   FILAS.forEach(f=>{
     g.appendChild(div("rowlabel","Fila "+f));
     COLUMNAS.forEach(c=>{
-      const u = data.find(x=>x.FILA===f && Number(x.COLUMNA)===c);
+      const u = data.find(x=>x.FILA===f && Number(x.COLUMNA)===c) || {};
 
-      const codigo = u?.UBICACION_CODIGO || "";
-      const producto = (u?.PRODUCTO || "").trim() ? u.PRODUCTO : "— vacío —";
-      const qtyUnit = ((u?.CANTIDAD || "") + " " + (u?.UNIDAD || "")).trim();
+      const codigo = normStr(pick(u, ["UBICACION_CODIGO","UBICACIÓN_CÓDIGO","UBICACION CODIGO","ubicacion_codigo"], ""));
+      const productoRaw = normStr(pick(u, ["PRODUCTO","producto"], ""));
+      const producto = productoRaw ? productoRaw : "— vacío —";
 
-      const lote = (u?.LOTE || "").trim();
+      const cantidad = normStr(pick(u, ["CANTIDAD","cantidad"], ""));
+      const unidad = normStr(pick(u, ["UNIDAD","unidad"], ""));
+      const qtyUnit = (cantidad + " " + unidad).trim();
+
+      // ✅ LOTE robusto
+      const lote = normStr(pick(u, ["LOTE","Lote","lote","LOTE "], ""));
       const loteTxt = lote ? `Lote: ${lote}` : "";
 
-      const est = (u?.ESTADO || "VACIO");
+      const est = normStr(pick(u, ["ESTADO","estado"], "VACIO")) || "VACIO";
 
       const d = document.createElement("div");
       d.className = "cell " + claseEstado(est);
@@ -224,22 +242,21 @@ function pintar(data){
   });
 }
 
-/* ✅ Resumen inventario: suma por PRODUCTO + LOTE (+ UNIDAD para no mezclar) */
+/* Resumen: PRODUCTO + LOTE (+ UNIDAD) */
 function pintarResumen(data){
   const tbody = document.querySelector("#tablaResumen tbody");
   tbody.innerHTML = "";
 
-  // key: producto||lote||unidad
   const resumen = {};
 
   data.forEach(u=>{
-    const producto = (u?.PRODUCTO || "").trim();
+    const producto = normStr(pick(u, ["PRODUCTO","producto"], ""));
     if (!producto) return;
 
-    const lote = (u?.LOTE || "").trim();
-    const unidad = (u?.UNIDAD || "").trim();
+    const lote = normStr(pick(u, ["LOTE","Lote","lote","LOTE "], ""));
+    const unidad = normStr(pick(u, ["UNIDAD","unidad"], ""));
 
-    const cantRaw = String(u?.CANTIDAD || "").trim();
+    const cantRaw = normStr(pick(u, ["CANTIDAD","cantidad"], ""));
     if (!cantRaw) return;
 
     const cant = Number(cantRaw.replace(",", "."));
@@ -250,14 +267,13 @@ function pintarResumen(data){
     resumen[key].total += cant;
   });
 
-  const items = Object.values(resumen)
-    .sort((a,b)=>{
-      const p = a.producto.localeCompare(b.producto);
-      if (p !== 0) return p;
-      const l = a.lote.localeCompare(b.lote);
-      if (l !== 0) return l;
-      return a.unidad.localeCompare(b.unidad);
-    });
+  const items = Object.values(resumen).sort((a,b)=>{
+    const p = a.producto.localeCompare(b.producto);
+    if (p !== 0) return p;
+    const l = a.lote.localeCompare(b.lote);
+    if (l !== 0) return l;
+    return a.unidad.localeCompare(b.unidad);
+  });
 
   if (items.length === 0){
     const tr = document.createElement("tr");
@@ -279,28 +295,31 @@ function pintarResumen(data){
 }
 
 function div(c,t){const d=document.createElement("div");d.className=c;d.textContent=t;return d}
-function escapeHtml(s){
-  return String(s ?? "").replace(/[&<>"']/g, m => ({
-    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
-  }[m]));
-}
 
 /* Modal */
 const bd = document.getElementById("backdrop");
 const mEstado = document.getElementById("mEstado");
 
 function abrirModal(u){
-  selected=u;
-  document.getElementById("mTitle").textContent="Editar "+u.UBICACION_CODIGO;
-  document.getElementById("mSub").textContent=`Fila ${u.FILA} · Col ${u.COLUMNA}`;
-  mEstado.value="";
-  document.getElementById("mProducto").value=u.PRODUCTO||"";
-  document.getElementById("mCantidad").value=u.CANTIDAD||"";
-  document.getElementById("mUnidad").value=u.UNIDAD||"";
-  document.getElementById("mLote").value=u.LOTE||"";
-  document.getElementById("mFecha").value=u.FECHA_ENTRADA||"";
-  document.getElementById("mObs").value=u.OBSERVACIONES||"";
-  document.getElementById("mNota").value="";
+  selected=u || {};
+
+  const codigo = normStr(pick(selected, ["UBICACION_CODIGO","UBICACIÓN_CÓDIGO","UBICACION CODIGO","ubicacion_codigo"], ""));
+  document.getElementById("mTitle").textContent = "Editar " + codigo;
+
+  const fila = normStr(pick(selected, ["FILA","fila"], ""));
+  const col = normStr(pick(selected, ["COLUMNA","columna"], ""));
+  document.getElementById("mSub").textContent = `Fila ${fila} · Col ${col}`;
+
+  mEstado.value = "";
+
+  document.getElementById("mProducto").value = normStr(pick(selected, ["PRODUCTO","producto"], ""));
+  document.getElementById("mCantidad").value = normStr(pick(selected, ["CANTIDAD","cantidad"], ""));
+  document.getElementById("mUnidad").value = normStr(pick(selected, ["UNIDAD","unidad"], ""));
+  document.getElementById("mLote").value   = normStr(pick(selected, ["LOTE","Lote","lote","LOTE "], ""));
+  document.getElementById("mFecha").value  = normStr(pick(selected, ["FECHA_ENTRADA","fecha_entrada"], ""));
+  document.getElementById("mObs").value    = normStr(pick(selected, ["OBSERVACIONES","observaciones"], ""));
+  document.getElementById("mNota").value   = "";
+
   bd.style.display="flex";
 }
 
@@ -308,19 +327,24 @@ document.getElementById("mCancel").onclick=()=>bd.style.display="none";
 bd.addEventListener("click",(e)=>{ if(e.target===bd) bd.style.display="none"; });
 
 document.getElementById("mSave").onclick=async ()=>{
-  if(!selected) return;
+  const usuario = document.getElementById("usuario").value.trim();
 
-  const payload={
-    ubicacion_codigo:selected.UBICACION_CODIGO,
-    producto:document.getElementById("mProducto").value.trim(),
-    cantidad:document.getElementById("mCantidad").value.trim(),
-    unidad:document.getElementById("mUnidad").value.trim(),
-    lote:document.getElementById("mLote").value.trim(),
-    fecha_entrada:document.getElementById("mFecha").value.trim(),
-    estado:mEstado.value,
-    observaciones:document.getElementById("mObs").value.trim(),
-    usuario:document.getElementById("usuario").value.trim(),
-    nota:document.getElementById("mNota").value.trim()
+  const ubic = normStr(pick(selected, ["UBICACION_CODIGO","UBICACIÓN_CÓDIGO","UBICACION CODIGO","ubicacion_codigo"], ""));
+  const loteVal = document.getElementById("mLote").value.trim();
+
+  // ✅ Enviamos doble clave: lote y LOTE
+  const payload = {
+    ubicacion_codigo: ubic,
+    producto: document.getElementById("mProducto").value.trim(),
+    cantidad: document.getElementById("mCantidad").value.trim(),
+    unidad:   document.getElementById("mUnidad").value.trim(),
+    lote:     loteVal,
+    LOTE:     loteVal,
+    fecha_entrada: document.getElementById("mFecha").value.trim(),
+    estado:   mEstado.value,
+    observaciones: document.getElementById("mObs").value.trim(),
+    usuario,
+    nota: document.getElementById("mNota").value.trim()
   };
 
   setStatus("Guardando…");
@@ -328,7 +352,7 @@ document.getElementById("mSave").onclick=async ()=>{
     const res = await jsonp(`${SCRIPT_URL}?action=update&data=${encodeURIComponent(JSON.stringify(payload))}`);
     if (!res || !res.ok) throw new Error(res?.error || "No se pudo guardar");
     bd.style.display="none";
-    await cargar(); // recalcula grid + resumen
+    await cargar();
     setStatus("Guardado ✅");
   }catch(e){
     console.error(e);
