@@ -36,6 +36,22 @@ button{cursor:pointer}
 .pB{background:#fdecea}
 .pR{background:#fff7e6}
 
+/* ✅ Tabla resumen */
+#tablaResumen{
+  border-collapse:collapse;
+  margin-top:18px;
+  min-width:520px;
+}
+#tablaResumen th,#tablaResumen td{
+  border:1px solid #ddd;
+  padding:8px 12px;
+  text-align:left;
+}
+#tablaResumen th{
+  background:#f2f2f2;
+  font-weight:700;
+}
+
 /* Modal */
 .backdrop{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;padding:18px}
 .modal{background:#fff;border-radius:16px;border:1px solid #eee;max-width:560px;width:100%;padding:16px}
@@ -76,6 +92,19 @@ button{cursor:pointer}
 </div>
 
 <div id="grid" class="grid"></div>
+
+<!-- ✅ Resumen inventario -->
+<h3 style="margin:18px 0 0 0">Resumen de inventario</h3>
+<table id="tablaResumen">
+  <thead>
+    <tr>
+      <th>Producto</th>
+      <th>Cantidad total</th>
+      <th>Unidad</th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+</table>
 
 <!-- MODAL -->
 <div id="backdrop" class="backdrop">
@@ -140,6 +169,7 @@ async function cargar(){
     if (!res || !res.ok) throw new Error(res?.error || "Respuesta inválida");
     cache = res.data || [];
     pintar(cache);
+    pintarResumen(cache); // ✅ NUEVO
     setStatus(`Cargadas ${cache.length} ubicaciones`);
   }catch(e){
     setStatus("Error: " + e.message);
@@ -156,7 +186,7 @@ function claseEstado(estado){
   return "vacio";
 }
 
-/* Pintar grid (✅ incluye LOTE visible) */
+/* Pintar grid (incluye LOTE) */
 function pintar(data){
   const g = document.getElementById("grid");
   g.innerHTML = "";
@@ -173,7 +203,6 @@ function pintar(data){
       const producto = (u?.PRODUCTO || "").trim() ? u.PRODUCTO : "— vacío —";
       const qtyUnit = ((u?.CANTIDAD || "") + " " + (u?.UNIDAD || "")).trim();
 
-      // ✅ NUEVO: lote visible en la tarjeta
       const lote = (u?.LOTE || "").trim();
       const loteTxt = lote ? `Lote: ${lote}` : "";
 
@@ -191,6 +220,51 @@ function pintar(data){
       d.onclick = ()=>abrirModal(u);
       g.appendChild(d);
     });
+  });
+}
+
+/* ✅ Resumen inventario: suma por producto */
+function pintarResumen(data){
+  const tbody = document.querySelector("#tablaResumen tbody");
+  tbody.innerHTML = "";
+
+  // key: producto||unidad (para no mezclar unidades distintas)
+  const resumen = {};
+
+  data.forEach(u=>{
+    const producto = (u?.PRODUCTO || "").trim();
+    if (!producto) return;
+
+    const unidad = (u?.UNIDAD || "").trim();
+    const cantRaw = String(u?.CANTIDAD || "").trim();
+    if (!cantRaw) return;
+
+    const cant = Number(cantRaw.replace(",", "."));
+    if (!isFinite(cant) || cant === 0) return;
+
+    const key = `${producto}||${unidad}`;
+    if (!resumen[key]) resumen[key] = { producto, unidad, total: 0 };
+    resumen[key].total += cant;
+  });
+
+  const items = Object.values(resumen)
+    .sort((a,b)=> a.producto.localeCompare(b.producto));
+
+  if (items.length === 0){
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td colspan="3" class="muted">Sin stock (no hay cantidades registradas)</td>`;
+    tbody.appendChild(tr);
+    return;
+  }
+
+  items.forEach(it=>{
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${escapeHtml(it.producto)}</td>
+      <td>${escapeHtml(it.total)}</td>
+      <td>${escapeHtml(it.unidad)}</td>
+    `;
+    tbody.appendChild(tr);
   });
 }
 
@@ -244,7 +318,7 @@ document.getElementById("mSave").onclick=async ()=>{
     const res = await jsonp(`${SCRIPT_URL}?action=update&data=${encodeURIComponent(JSON.stringify(payload))}`);
     if (!res || !res.ok) throw new Error(res?.error || "No se pudo guardar");
     bd.style.display="none";
-    await cargar();
+    await cargar(); // recalcula grid + resumen
     setStatus("Guardado ✅");
   }catch(e){
     console.error(e);
