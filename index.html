@@ -1,397 +1,712 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="utf-8">
-<title>Almacén Virtual 2D</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Almacén Virtual</title>
 
-<style>
-body{font-family:system-ui,Arial,sans-serif;margin:20px;max-width:1200px}
-.top{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
-select,input,button,textarea{padding:9px 12px;font-size:14px;border:1px solid #ccc;border-radius:10px}
-button{cursor:pointer}
-.muted{color:#666;font-size:12px}
+  <!-- html2canvas para capturar el DOM a PNG -->
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 
-/* Grid */
-.grid{margin-top:18px;display:grid;grid-template-columns:110px repeat(4, 1fr);gap:12px}
-.header{font-weight:700;text-align:center}
-.rowlabel{font-weight:700;text-align:center;display:flex;align-items:center;justify-content:center;border:1px dashed #ddd;border-radius:14px}
+  <style>
+    :root{
+      --border:#d8d8d8;
+      --soft:#f6f6f6;
+      --txt:#111;
+      --muted:#666;
+    }
+    body{
+      font-family: Arial, Helvetica, sans-serif;
+      margin: 0;
+      padding: 18px 18px 60px;
+      color: var(--txt);
+      background:#fff;
+    }
+    header{
+      display:flex;
+      align-items:center;
+      gap:14px;
+      flex-wrap:wrap;
+      margin-bottom:14px;
+    }
+    h1{
+      margin:0;
+      font-size:44px;
+      font-weight:800;
+      letter-spacing:-0.5px;
+    }
+    .bar{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      flex-wrap:wrap;
+    }
+    label{
+      font-weight:700;
+      color:#222;
+    }
+    select, input, button{
+      font-size:16px;
+      padding:10px 12px;
+      border:1px solid #cfcfcf;
+      border-radius:12px;
+      outline:none;
+      background:#fff;
+    }
+    button{
+      cursor:pointer;
+      font-weight:700;
+      background:#f3f3f3;
+    }
+    button:hover{ background:#ececec; }
+    .status-pill{
+      display:inline-block;
+      padding:8px 12px;
+      border-radius:999px;
+      border:1px solid #d0d0d0;
+      font-size:13px;
+      margin-right:8px;
+      user-select:none;
+    }
+    .pill-vacio{ background:#f2f2f2; }
+    .pill-ok{ background:#e6f4ea; }
+    .pill-bloqueado{ background:#ffdeea; }
+    .pill-revision{ background:#fff7e6; }
 
-.cell{border-radius:14px;padding:12px;min-height:92px;border:1px solid #ccc;display:flex;flex-direction:column;gap:6px}
-.cell:hover{outline:2px solid rgba(0,0,0,.08)}
+    .meta{
+      color:var(--muted);
+      font-size:14px;
+      margin-left:6px;
+    }
 
-.vacio{background:#f2f2f2}
-.ok{background:#e6f4ea}
-.bloqueado{background:#fdecea}
-.revision{background:#fff7e6}
+    /* GRID */
+    .grid-wrap{
+      margin-top:8px;
+    }
+    .grid{
+      display:grid;
+      grid-template-columns: 140px repeat(4, minmax(170px, 1fr));
+      gap:14px;
+      align-items:stretch;
+    }
+    .col-head{
+      text-align:center;
+      font-weight:800;
+      font-size:18px;
+      padding:6px 0;
+    }
+    .row-head{
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-weight:800;
+      font-size:18px;
+      border:1px dashed var(--border);
+      border-radius:14px;
+      background:#fff;
+    }
+    .card{
+      border:1px solid #cfcfcf;
+      border-radius:16px;
+      padding:14px;
+      background:#f7f7f7;
+      box-shadow: 0 1px 0 rgba(0,0,0,0.06) inset;
+      cursor:pointer;
+      min-height:105px;
+    }
+    .card:hover{ outline:2px solid #e7e7e7; }
+    .code{
+      font-weight:900;
+      font-size:22px;
+      margin-bottom:6px;
+    }
+    .prod{
+      font-size:18px;
+      margin:6px 0;
+    }
+    .small{
+      font-size:13px;
+      color:#444;
+      margin-top:4px;
+    }
+    .estado-txt{
+      margin-top:8px;
+      font-size:13px;
+      color:#333;
+      font-weight:800;
+      letter-spacing:0.3px;
+    }
 
-.code{font-weight:800}
-.small{font-size:12px;color:#444}
+    /* clases por estado */
+    .vacio{ background:#f2f2f2; }
+    .ok{ background:#e6f4ea; }
+    .bloqueado{ background:#ffdeea; }
+    .revision{ background:#fff7e6; }
 
-/* Leyenda */
-.legend{margin-top:10px;display:flex;gap:10px;flex-wrap:wrap}
-.pill{display:inline-block;padding:3px 10px;border-radius:999px;border:1px solid #ddd;font-size:12px}
-.pV{background:#f2f2f2}
-.pOK{background:#e6f4ea}
-.pB{background:#fdecea}
-.pR{background:#fff7e6}
+    /* MODAL */
+    .modal-backdrop{
+      position:fixed;
+      inset:0;
+      background: rgba(0,0,0,0.35);
+      display:none;
+      align-items:center;
+      justify-content:center;
+      padding:18px;
+      z-index:999;
+    }
+    .modal{
+      background:#fff;
+      border-radius:18px;
+      width:min(720px, 100%);
+      border:1px solid #ddd;
+      padding:16px;
+    }
+    .modal h2{
+      margin:0 0 8px;
+      font-size:22px;
+    }
+    .modal-grid{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:12px;
+      margin-top:10px;
+    }
+    .modal-grid .full{ grid-column: 1 / -1; }
+    .modal-actions{
+      display:flex;
+      gap:10px;
+      justify-content:flex-end;
+      margin-top:14px;
+    }
+    .btn-primary{
+      background:#1a73e8;
+      color:#fff;
+      border:1px solid #1a73e8;
+    }
+    .btn-primary:hover{ background:#1666cf; }
+    .btn-danger{
+      background:#e74c3c;
+      color:#fff;
+      border:1px solid #e74c3c;
+    }
+    .btn-danger:hover{ background:#d74333; }
 
-/* Tabla resumen */
-#tablaResumen{
-  border-collapse:collapse;
-  margin-top:18px;
-  min-width:700px;
-}
-#tablaResumen th,#tablaResumen td{
-  border:1px solid #ddd;
-  padding:8px 12px;
-  text-align:left;
-}
-#tablaResumen th{
-  background:#f2f2f2;
-  font-weight:700;
-}
+    /* Resumen */
+    .summary{
+      margin-top:26px;
+    }
+    .summary h3{
+      margin:0 0 10px;
+      font-size:22px;
+    }
+    table{
+      border-collapse:collapse;
+      width:min(780px, 100%);
+      background:#fff;
+      border:1px solid #ddd;
+    }
+    th, td{
+      border:1px solid #ddd;
+      padding:10px 12px;
+      text-align:left;
+      font-size:14px;
+    }
+    th{ background:#fafafa; }
 
-/* Modal */
-.backdrop{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;padding:18px}
-.modal{background:#fff;border-radius:16px;border:1px solid #eee;max-width:560px;width:100%;padding:16px}
-.modal h3{margin:0 0 6px 0}
-.form{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
-.full{grid-column:1/-1}
-.actions{display:flex;gap:10px;justify-content:flex-end;margin-top:12px}
-
-/* Contenedor capturable */
-#captureArea{
-  background:#fff;
-}
-</style>
-
-<!-- ✅ Librería para capturar pantalla -->
-<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+    @media (max-width: 980px){
+      .grid{ grid-template-columns: 120px repeat(2, minmax(170px, 1fr)); }
+    }
+    @media (max-width: 620px){
+      h1{ font-size:32px; }
+      .grid{ grid-template-columns: 1fr; }
+      .row-head{ display:none; }
+      .col-head{ display:none; }
+      .modal-grid{ grid-template-columns: 1fr; }
+    }
+  </style>
 </head>
 
 <body>
+  <div id="app">
+    <header>
+      <h1>Almacén Virtual</h1>
 
-<div class="top">
-  <h2 style="margin:0">Almacén Virtual</h2>
+      <div class="bar">
+        <label for="almacenSelect">Almacén:</label>
+        <select id="almacenSelect">
+          <option value="ALM1">ALM1</option>
+          <option value="ALM2">ALM2</option>
+        </select>
 
-  <label>
-    Almacén:
-    <select id="almacen">
-      <option value="ALM1">ALM1</option>
-      <option value="ALM2">ALM2</option>
-    </select>
-  </label>
+        <label for="usuarioInput">Usuario:</label>
+        <input id="usuarioInput" placeholder="Ej: Carlos" />
 
-  <label>
-    Usuario:
-    <input id="usuario" placeholder="Ej: Carlos" />
-  </label>
+        <button id="btnActualizar">Actualizar</button>
+        <button id="btnGuardarCaptura">Guardar captura</button>
 
-  <button id="btnActualizar">Actualizar</button>
-  <button id="btnCaptura">Guardar captura</button>
-  <span id="estado" class="muted">—</span>
-</div>
+        <span id="statusTxt" class="meta">Listo</span>
+      </div>
 
-<div id="captureArea">
-  <div class="legend">
-    <span class="pill pV">VACIO</span>
-    <span class="pill pOK">OK</span>
-    <span class="pill pB">BLOQUEADO</span>
-    <span class="pill pR">REVISIÓN</span>
-  </div>
+      <div style="width:100%; margin-top:8px;">
+        <span class="status-pill pill-vacio">VACIO</span>
+        <span class="status-pill pill-ok">OK</span>
+        <span class="status-pill pill-bloqueado">BLOQUEADO</span>
+        <span class="status-pill pill-revision">REVISIÓN</span>
+      </div>
+    </header>
 
-  <div id="grid" class="grid"></div>
-
-  <h3 style="margin:18px 0 0 0">Resumen de inventario (Producto + Lote)</h3>
-  <table id="tablaResumen">
-    <thead>
-      <tr>
-        <th>Producto</th>
-        <th>Lote</th>
-        <th>Cantidad total</th>
-        <th>Unidad</th>
-      </tr>
-    </thead>
-    <tbody></tbody>
-  </table>
-</div>
-
-<!-- MODAL -->
-<div id="backdrop" class="backdrop">
-  <div class="modal">
-    <h3 id="mTitle">Editar ubicación</h3>
-    <div id="mSub" class="muted"></div>
-
-    <div class="form">
-      <input id="mProducto" class="full" placeholder="Producto" />
-      <input id="mCantidad" placeholder="Cantidad" />
-      <input id="mUnidad" placeholder="Unidad" />
-      <input id="mLote" placeholder="Lote" />
-      <input id="mFecha" placeholder="Fecha entrada (YYYY-MM-DD)" />
-
-      <select id="mEstado">
-        <option value="">(auto)</option>
-        <option value="VACIO">VACIO</option>
-        <option value="OK">OK</option>
-        <option value="BLOQUEADO">BLOQUEADO</option>
-        <option value="REVISIÓN">REVISIÓN</option>
-      </select>
-
-      <textarea id="mObs" class="full" rows="3" placeholder="Observaciones"></textarea>
-      <input id="mNota" class="full" placeholder="Nota para MOVIMIENTOS (opcional)" />
+    <div class="grid-wrap">
+      <div class="grid" id="grid"></div>
     </div>
 
-    <div class="actions">
-      <button id="mCancel">Cancelar</button>
-      <button id="mSave">Guardar</button>
+    <section class="summary">
+      <h3>Resumen de inventario (Producto - Lote)</h3>
+      <table id="summaryTable">
+        <thead>
+          <tr>
+            <th>Producto</th>
+            <th>Lote</th>
+            <th>Cantidad total</th>
+            <th>Unidad</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+  </div>
+
+  <!-- MODAL -->
+  <div class="modal-backdrop" id="modalBackdrop">
+    <div class="modal">
+      <h2 id="mTitle">Editar</h2>
+
+      <div class="modal-grid">
+        <div>
+          <label>Producto</label>
+          <input id="mProducto" />
+        </div>
+        <div>
+          <label>Cantidad</label>
+          <input id="mCantidad" />
+        </div>
+        <div>
+          <label>Unidad</label>
+          <input id="mUnidad" />
+        </div>
+        <div>
+          <label>Lote</label>
+          <input id="mLote" />
+        </div>
+        <div class="full">
+          <label>Fecha entrada</label>
+          <input id="mFechaEntrada" placeholder="YYYY-MM-DD" />
+        </div>
+        <div class="full">
+          <label>Estado</label>
+          <select id="mEstado">
+            <option value="">(auto)</option>
+            <option value="VACIO">VACIO</option>
+            <option value="OK">OK</option>
+            <option value="BLOQUEADO">BLOQUEADO</option>
+            <option value="REVISIÓN">REVISIÓN</option>
+          </select>
+        </div>
+        <div class="full">
+          <label>Observaciones</label>
+          <input id="mObs" />
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button id="btnCancelar">Cancelar</button>
+        <button id="btnVaciar" class="btn-danger">Vaciar</button>
+        <button id="btnGuardar" class="btn-primary">Guardar</button>
+      </div>
     </div>
   </div>
-</div>
 
-<script>
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz_XjZgMWd3LjbY0H7PfHyNi38CBGLhghoKkoi2Q6xkHv7IXGYYr3RZvcR2NCjBlZuU/exec";
-const FILAS = ["A","B","C","D"];
-const COLUMNAS = [1,2,3,4];
+  <script>
+    /***********************
+     * CONFIG
+     ***********************/
+    const API_URL = "https://script.google.com/macros/s/AKfycbxKTR-MsLZVxsFRSHQVvaVlY3p9BpNf-7Hp5vXsZzxou9KJMfdZ5K26WS-mQXJ_VH_D/exec";
 
-let cache = [];
-let selected = null;
+    const FILAS = ["A","B","C","D"];
+    const COLS = [1,2,3,4];
 
-function escapeHtml(s){
-  return String(s ?? "").replace(/[&<>"']/g, m => ({
-    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
-  }[m]));
-}
+    /***********************
+     * STATE
+     ***********************/
+    let ubicaciones = [];
+    let selected = null; // objeto ubicación seleccionada en modal
 
-function setStatus(t){ document.getElementById("estado").textContent = t; }
+    /***********************
+     * HELPERS
+     ***********************/
+    function setStatus(msg){
+      document.getElementById("statusTxt").textContent = msg;
+    }
 
-/* JSONP */
-function jsonp(url){
-  return new Promise((resolve, reject) => {
-    const cb = "cb_" + Math.random().toString(36).slice(2);
-    const s = document.createElement("script");
-    window[cb] = d => { delete window[cb]; s.remove(); resolve(d); };
-    s.onerror = () => { delete window[cb]; s.remove(); reject(new Error("JSONP error")); };
-    s.src = url + (url.includes("?") ? "&" : "?") + "callback=" + cb;
-    document.body.appendChild(s);
-  });
-}
+    function claseEstado(estado){
+      const e = (estado || "").toUpperCase().trim();
+      if (e === "OK") return "ok";
+      if (e === "BLOQUEADO") return "bloqueado";
+      if (e === "REVISIÓN" || e === "REVISION") return "revision";
+      return "vacio";
+    }
 
-async function cargar(){
-  const alm = document.getElementById("almacen").value;
-  setStatus("Cargando…");
-  try{
-    const res = await jsonp(`${SCRIPT_URL}?action=get&almacen=${encodeURIComponent(alm)}`);
-    if (!res || !res.ok) throw new Error(res?.error || "Respuesta inválida");
-    cache = res.data || [];
-    pintar(cache);
-    pintarResumen(cache);
-    setStatus(`Cargadas ${cache.length} ubicaciones`);
-  }catch(e){
-    setStatus("Error: " + e.message);
-    console.error(e);
-  }
-}
+    function fmtQty(ubic){
+      const c = (ubic.CANTIDAD || "").toString().trim();
+      const u = (ubic.UNIDAD || "").toString().trim();
+      if (!c) return "";
+      return u ? `${c} ${u}` : c;
+    }
 
-function claseEstado(estado){
-  const e = String(estado||"").toUpperCase().trim();
-  if (e === "OK" || e === "OCUPADO") return "ok";
-  if (e === "BLOQUEADO") return "bloqueado";
-  if (e === "REVISIÓN" || e === "REVISION") return "revision";
-  return "vacio";
-}
+    function safeText(x){
+      return (x === null || x === undefined) ? "" : String(x);
+    }
 
-function div(c,t){const d=document.createElement("div");d.className=c;d.textContent=t;return d}
+    function jsonp(url){
+      return new Promise((resolve, reject) => {
+        const cb = "cb_" + Date.now() + "_" + Math.floor(Math.random() * 999999);
+        window[cb] = (data) => {
+          try { resolve(data); }
+          finally {
+            delete window[cb];
+            script.remove();
+          }
+        };
+        const script = document.createElement("script");
+        script.src = url + (url.includes("?") ? "&" : "?") + "callback=" + cb;
+        script.onerror = () => {
+          delete window[cb];
+          script.remove();
+          reject(new Error("Failed to load JSONP"));
+        };
+        document.body.appendChild(script);
+      });
+    }
 
-/* Grid */
-function pintar(data){
-  const g = document.getElementById("grid");
-  g.innerHTML = "";
+    /***********************
+     * API
+     ***********************/
+    async function apiGetUbicaciones(almacen){
+      const url = `${API_URL}?action=get&almacen=${encodeURIComponent(almacen)}`;
+      return await jsonp(url);
+    }
 
-  g.appendChild(div("header",""));
-  COLUMNAS.forEach(c => g.appendChild(div("header","Col "+c)));
+    async function apiUpdate(payload){
+      const url = `${API_URL}?action=update&data=${encodeURIComponent(JSON.stringify(payload))}`;
+      return await jsonp(url);
+    }
 
-  FILAS.forEach(f=>{
-    g.appendChild(div("rowlabel","Fila "+f));
-    COLUMNAS.forEach(c=>{
-      const u = data.find(x=>x.FILA===f && Number(x.COLUMNA)===c);
+    async function apiGuardarCaptura(payload){
+      const url = `${API_URL}?action=guardar_captura&data=${encodeURIComponent(JSON.stringify(payload))}`;
+      return await jsonp(url);
+    }
 
-      const codigo = u?.UBICACION_CODIGO || "";
-      const producto = (u?.PRODUCTO || "").trim() ? u.PRODUCTO : "— vacío —";
-      const qtyUnit = ((u?.CANTIDAD || "") + " " + (u?.UNIDAD || "")).trim();
+    /***********************
+     * RENDER GRID
+     ***********************/
+    function renderGrid(){
+      const grid = document.getElementById("grid");
+      grid.innerHTML = "";
 
-      const lote = (u?.LOTE || "").trim();
-      const loteTxt = lote ? `Lote: ${lote}` : "";
+      // cabecera columnas
+      grid.appendChild(document.createElement("div")); // esquina vacía
+      for (const c of COLS){
+        const h = document.createElement("div");
+        h.className = "col-head";
+        h.textContent = `Col ${c}`;
+        grid.appendChild(h);
+      }
 
-      const est = (u?.ESTADO || "VACIO");
+      // filas
+      for (const f of FILAS){
+        const rh = document.createElement("div");
+        rh.className = "row-head";
+        rh.textContent = `Fila ${f}`;
+        grid.appendChild(rh);
 
-      const d = document.createElement("div");
-      d.className = "cell " + claseEstado(est);
-      d.innerHTML = `
-        <div class="code">${escapeHtml(codigo)}</div>
-        <div>${escapeHtml(producto)}</div>
-        <div class="muted">${escapeHtml(qtyUnit)}</div>
-        ${loteTxt ? `<div class="muted">${escapeHtml(loteTxt)}</div>` : ``}
-        <div class="small muted">${escapeHtml(est)}</div>
-      `;
-      d.onclick = ()=>abrirModal(u);
-      g.appendChild(d);
+        for (const c of COLS){
+          const code = `${currentAlmacen()}-${f}-${String(c).padStart(2,"0")}`;
+          const u = ubicaciones.find(x => (x.UBICACION_CODIGO || "") === code) || {
+            UBICACION_CODIGO: code,
+            FILA: f,
+            COLUMNA: c,
+            PRODUCTO: "",
+            CANTIDAD: "",
+            UNIDAD: "",
+            LOTE: "",
+            FECHA_ENTRADA: "",
+            ESTADO: "VACIO",
+            OBSERVACIONES: ""
+          };
+
+          const card = document.createElement("div");
+          card.className = `card ${claseEstado(u.ESTADO)}`;
+          card.addEventListener("click", () => openModal(u));
+
+          const codeDiv = document.createElement("div");
+          codeDiv.className = "code";
+          codeDiv.textContent = u.UBICACION_CODIGO;
+
+          const prodDiv = document.createElement("div");
+          prodDiv.className = "prod";
+          prodDiv.textContent = u.PRODUCTO ? u.PRODUCTO : "— vacío —";
+
+          const qtyDiv = document.createElement("div");
+          qtyDiv.className = "small";
+          qtyDiv.textContent = fmtQty(u);
+
+          const loteDiv = document.createElement("div");
+          loteDiv.className = "small";
+          loteDiv.textContent = u.LOTE ? `Lote: ${u.LOTE}` : "";
+
+          const estDiv = document.createElement("div");
+          estDiv.className = "estado-txt";
+          estDiv.textContent = (u.ESTADO || "VACIO");
+
+          card.appendChild(codeDiv);
+          card.appendChild(prodDiv);
+          card.appendChild(qtyDiv);
+          card.appendChild(loteDiv);
+          card.appendChild(estDiv);
+
+          grid.appendChild(card);
+        }
+      }
+    }
+
+    /***********************
+     * RESUMEN (Producto-Lote)
+     ***********************/
+    function parseNumberSafe(x){
+      const s = safeText(x).trim();
+      if (!s) return NaN;
+      const n = Number(s.replace(",", "."));
+      return isFinite(n) ? n : NaN;
+    }
+
+    function renderResumen(){
+      const tbody = document.querySelector("#summaryTable tbody");
+      tbody.innerHTML = "";
+
+      const map = new Map(); // key: producto||lote||unidad
+
+      for (const u of ubicaciones){
+        const estado = safeText(u.ESTADO).toUpperCase().trim();
+        if (estado === "VACIO") continue;
+
+        const prod = safeText(u.PRODUCTO).trim();
+        const lote = safeText(u.LOTE).trim();
+        const unidad = safeText(u.UNIDAD).trim();
+        const qty = parseNumberSafe(u.CANTIDAD);
+
+        if (!prod) continue;
+        if (!isFinite(qty) || qty <= 0) continue;
+
+        const key = `${prod}||${lote}||${unidad}`;
+        const cur = map.get(key) || { producto: prod, lote, unidad, total: 0 };
+        cur.total += qty;
+        map.set(key, cur);
+      }
+
+      const rows = Array.from(map.values()).sort((a,b) => {
+        const pa = a.producto.localeCompare(b.producto);
+        if (pa !== 0) return pa;
+        return a.lote.localeCompare(b.lote);
+      });
+
+      if (rows.length === 0){
+        const tr = document.createElement("tr");
+        const td = document.createElement("td");
+        td.colSpan = 4;
+        td.textContent = "Sin datos.";
+        tr.appendChild(td);
+        tbody.appendChild(tr);
+        return;
+      }
+
+      for (const r of rows){
+        const tr = document.createElement("tr");
+        const td1 = document.createElement("td"); td1.textContent = r.producto;
+        const td2 = document.createElement("td"); td2.textContent = r.lote || "-";
+        const td3 = document.createElement("td"); td3.textContent = String(r.total);
+        const td4 = document.createElement("td"); td4.textContent = r.unidad || "-";
+        tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3); tr.appendChild(td4);
+        tbody.appendChild(tr);
+      }
+    }
+
+    /***********************
+     * MODAL
+     ***********************/
+    function openModal(u){
+      selected = JSON.parse(JSON.stringify(u)); // copia
+      document.getElementById("mTitle").textContent = `Editar ${u.UBICACION_CODIGO}`;
+
+      document.getElementById("mProducto").value = safeText(u.PRODUCTO);
+      document.getElementById("mCantidad").value = safeText(u.CANTIDAD);
+      document.getElementById("mUnidad").value = safeText(u.UNIDAD);
+      document.getElementById("mLote").value = safeText(u.LOTE);
+      document.getElementById("mFechaEntrada").value = safeText(u.FECHA_ENTRADA);
+      document.getElementById("mEstado").value = safeText(u.ESTADO);
+      document.getElementById("mObs").value = safeText(u.OBSERVACIONES);
+
+      document.getElementById("modalBackdrop").style.display = "flex";
+    }
+
+    function closeModal(){
+      document.getElementById("modalBackdrop").style.display = "none";
+      selected = null;
+    }
+
+    async function guardarModal(){
+      if (!selected) return;
+
+      const usuario = document.getElementById("usuarioInput").value.trim();
+
+      const payload = {
+        ubicacion_codigo: selected.UBICACION_CODIGO,
+        usuario: usuario,
+        producto: document.getElementById("mProducto").value.trim(),
+        cantidad: document.getElementById("mCantidad").value.trim(),
+        unidad: document.getElementById("mUnidad").value.trim(),
+        lote: document.getElementById("mLote").value.trim(),
+        fecha_entrada: document.getElementById("mFechaEntrada").value.trim(),
+        estado: document.getElementById("mEstado").value.trim(),
+        observaciones: document.getElementById("mObs").value.trim(),
+        nota: ""
+      };
+
+      setStatus("Guardando...");
+      const res = await apiUpdate(payload);
+
+      if (!res.ok){
+        alert("Error guardando: " + (res.error || "desconocido"));
+        setStatus("Error");
+        return;
+      }
+
+      closeModal();
+      await cargar();
+    }
+
+    async function vaciarModal(){
+      if (!selected) return;
+
+      const usuario = document.getElementById("usuarioInput").value.trim();
+
+      const payload = {
+        ubicacion_codigo: selected.UBICACION_CODIGO,
+        usuario: usuario,
+        producto: "",
+        cantidad: "",
+        unidad: "",
+        lote: "",
+        fecha_entrada: "",
+        estado: "VACIO",
+        observaciones: "",
+        nota: "Vaciar"
+      };
+
+      setStatus("Vaciando...");
+      const res = await apiUpdate(payload);
+
+      if (!res.ok){
+        alert("Error vaciando: " + (res.error || "desconocido"));
+        setStatus("Error");
+        return;
+      }
+
+      closeModal();
+      await cargar();
+    }
+
+    /***********************
+     * CAPTURA PNG -> Apps Script -> Drive
+     ***********************/
+    function ymd(){
+      const d = new Date();
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2,"0");
+      const dd = String(d.getDate()).padStart(2,"0");
+      return `${yyyy}-${mm}-${dd}`;
+    }
+
+    async function guardarCapturaPNG(){
+      try{
+        setStatus("Generando PNG...");
+        const almacen = currentAlmacen();
+        const el = document.getElementById("app");
+
+        const canvas = await html2canvas(el, { scale: 2, useCORS: true });
+        const dataUrl = canvas.toDataURL("image/png");
+        const pngBase64 = dataUrl.split(",")[1];
+
+        setStatus("Subiendo a Drive...");
+        const payload = {
+          almacen,
+          fechaFolder: ymd(),
+          pngBase64
+        };
+
+        const res = await apiGuardarCaptura(payload);
+        if (!res.ok){
+          alert("Error guardando captura: " + (res.error || "desconocido"));
+          setStatus("Error");
+          return;
+        }
+
+        alert("Captura guardada OK ✅");
+        setStatus("Captura guardada");
+      } catch(e){
+        alert("Error guardando captura: " + e.message);
+        setStatus("Error");
+      }
+    }
+
+    /***********************
+     * LOAD
+     ***********************/
+    function currentAlmacen(){
+      return document.getElementById("almacenSelect").value;
+    }
+
+    async function cargar(){
+      const almacen = currentAlmacen();
+      setStatus("Cargando...");
+
+      const res = await apiGetUbicaciones(almacen);
+      if (!res.ok){
+        alert("Error cargando: " + (res.error || "desconocido"));
+        setStatus("Error");
+        return;
+      }
+
+      ubicaciones = Array.isArray(res.data) ? res.data : [];
+      setStatus(`Cargadas ${ubicaciones.length} ubicaciones`);
+
+      renderGrid();
+      renderResumen();
+    }
+
+    /***********************
+     * INIT
+     ***********************/
+    document.getElementById("btnActualizar").addEventListener("click", cargar);
+    document.getElementById("btnGuardarCaptura").addEventListener("click", guardarCapturaPNG);
+
+    document.getElementById("btnCancelar").addEventListener("click", closeModal);
+    document.getElementById("modalBackdrop").addEventListener("click", (e) => {
+      if (e.target.id === "modalBackdrop") closeModal();
     });
-  });
-}
+    document.getElementById("btnGuardar").addEventListener("click", guardarModal);
+    document.getElementById("btnVaciar").addEventListener("click", vaciarModal);
 
-/* Resumen producto + lote */
-function pintarResumen(data){
-  const tbody = document.querySelector("#tablaResumen tbody");
-  tbody.innerHTML = "";
-
-  const resumen = {};
-
-  data.forEach(u=>{
-    const producto = (u?.PRODUCTO || "").trim();
-    if (!producto) return;
-
-    const lote = (u?.LOTE || "").trim();
-    const unidad = (u?.UNIDAD || "").trim();
-
-    const cantRaw = String(u?.CANTIDAD || "").trim();
-    if (!cantRaw) return;
-
-    const cant = Number(cantRaw.replace(",", "."));
-    if (!isFinite(cant) || cant === 0) return;
-
-    const key = `${producto}||${lote}||${unidad}`;
-    if (!resumen[key]) resumen[key] = { producto, lote, unidad, total: 0 };
-    resumen[key].total += cant;
-  });
-
-  const items = Object.values(resumen).sort((a,b)=>{
-    const p = a.producto.localeCompare(b.producto);
-    if (p !== 0) return p;
-    const l = a.lote.localeCompare(b.lote);
-    if (l !== 0) return l;
-    return a.unidad.localeCompare(b.unidad);
-  });
-
-  if (items.length === 0){
-    const tr = document.createElement("tr");
-    tr.innerHTML = `<td colspan="4" class="muted">Sin stock (no hay cantidades registradas)</td>`;
-    tbody.appendChild(tr);
-    return;
-  }
-
-  items.forEach(it=>{
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${escapeHtml(it.producto)}</td>
-      <td>${escapeHtml(it.lote || "—")}</td>
-      <td>${escapeHtml(it.total)}</td>
-      <td>${escapeHtml(it.unidad)}</td>
-    `;
-    tbody.appendChild(tr);
-  });
-}
-
-/* Modal */
-const bd = document.getElementById("backdrop");
-const mEstado = document.getElementById("mEstado");
-
-function abrirModal(u){
-  selected=u;
-  document.getElementById("mTitle").textContent="Editar "+u.UBICACION_CODIGO;
-  document.getElementById("mSub").textContent=`Fila ${u.FILA} · Col ${u.COLUMNA}`;
-  mEstado.value="";
-  document.getElementById("mProducto").value=u.PRODUCTO||"";
-  document.getElementById("mCantidad").value=u.CANTIDAD||"";
-  document.getElementById("mUnidad").value=u.UNIDAD||"";
-  document.getElementById("mLote").value=u.LOTE||"";
-  document.getElementById("mFecha").value=u.FECHA_ENTRADA||"";
-  document.getElementById("mObs").value=u.OBSERVACIONES||"";
-  document.getElementById("mNota").value="";
-  bd.style.display="flex";
-}
-
-document.getElementById("mCancel").onclick=()=>bd.style.display="none";
-bd.addEventListener("click",(e)=>{ if(e.target===bd) bd.style.display="none"; });
-
-document.getElementById("mSave").onclick=async ()=>{
-  if(!selected) return;
-
-  const payload={
-    ubicacion_codigo:selected.UBICACION_CODIGO,
-    producto:document.getElementById("mProducto").value.trim(),
-    cantidad:document.getElementById("mCantidad").value.trim(),
-    unidad:document.getElementById("mUnidad").value.trim(),
-    lote:document.getElementById("mLote").value.trim(),
-    fecha_entrada:document.getElementById("mFecha").value.trim(),
-    estado:mEstado.value,
-    observaciones:document.getElementById("mObs").value.trim(),
-    usuario:document.getElementById("usuario").value.trim(),
-    nota:document.getElementById("mNota").value.trim()
-  };
-
-  setStatus("Guardando…");
-  try{
-    const res = await jsonp(`${SCRIPT_URL}?action=update&data=${encodeURIComponent(JSON.stringify(payload))}`);
-    if (!res || !res.ok) throw new Error(res?.error || "No se pudo guardar");
-    bd.style.display="none";
-    await cargar();
-    setStatus("Guardado ✅");
-  }catch(e){
-    console.error(e);
-    setStatus("Error guardando: " + e.message);
-  }
-};
-
-/* ✅ CAPTURA Y SUBIDA A DRIVE */
-function pad2(n){ return String(n).padStart(2,"0"); }
-function todayFolder(){
-  const d = new Date();
-  return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
-}
-function timestampName(){
-  const d = new Date();
-  return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}_${pad2(d.getHours())}${pad2(d.getMinutes())}${pad2(d.getSeconds())}`;
-}
-
-document.getElementById("btnCaptura").onclick = async ()=>{
-  try{
-    const alm = document.getElementById("almacen").value;
-    const dateFolder = todayFolder();
-    const filename = `${alm}_${timestampName()}.png`;
-
-    setStatus("Generando captura…");
-
-    const area = document.getElementById("captureArea");
-    const canvas = await html2canvas(area, { scale: 2, useCORS: true });
-    const imageData = canvas.toDataURL("image/png");
-
-    setStatus("Subiendo a Drive…");
-
-    const resp = await fetch(SCRIPT_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ almacen: alm, dateFolder, filename, imageData })
-    });
-
-    const json = await resp.json();
-    if (!json.ok) throw new Error(json.error || "No se pudo guardar en Drive");
-
-    setStatus(`Captura guardada ✅ (${json.folderName})`);
-    // opcional: abrir el archivo
-    window.open(json.fileUrl, "_blank");
-
-  }catch(err){
-    console.error(err);
-    setStatus("Error captura: " + err.message);
-    alert("Error guardando captura: " + err.message);
-  }
-};
-
-document.getElementById("btnActualizar").onclick=cargar;
-document.getElementById("almacen").onchange=cargar;
-cargar();
-</script>
-
+    // carga inicial
+    cargar();
+  </script>
 </body>
 </html>
